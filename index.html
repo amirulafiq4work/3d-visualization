@@ -61,6 +61,14 @@
       border-radius: 4px;
       font-size: 12px;
     }
+    .info {
+      margin-top: 8px;
+      padding: 4px;
+      background: #e8f4fd;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #0c5460;
+    }
     /* small responsive tweak */
     @media (max-width:600px){
       .controls{ width: 90%; left: 50%; transform: translateX(-50%); }
@@ -97,6 +105,10 @@
 
     <div class="status">
       <strong>Status:</strong> <span id="userEmail">not signed in</span>
+    </div>
+    
+    <div class="info">
+      <strong>Info:</strong> <span id="dataInfo">No data loaded</span>
     </div>
   </div>
 
@@ -489,7 +501,7 @@
       };
       
       this.domElement.addEventListener( 'contextmenu', function ( event ) { event.preventDefault(); }, false );
-      this.domElement.addEventListener( 'mousedown', mousedown, false );
+      this.domElement.addEventListener( 'mousedown', mousemove, false );
       this.handleResize();
       window.addEventListener( 'resize', this.handleResize, false );
     };
@@ -751,15 +763,23 @@
         }
         
         const headers = rows[0];
-        const data = rows.slice(1).map(r => {
-          const obj = {};
-          for (let i = 0; i < headers.length; i++) {
-            obj[headers[i]] = r[i] || '';
-          }
-          return obj;
-        });
+        // Filter out empty rows - only include rows that have at least a name
+        const data = rows.slice(1)
+          .map(r => {
+            const obj = {};
+            for (let i = 0; i < headers.length; i++) {
+              obj[headers[i]] = r[i] || '';
+            }
+            return obj;
+          })
+          .filter(row => {
+            // Only include rows that have at least a name
+            return row['Name'] && row['Name'].trim() !== '';
+          });
         
-        console.log(`Loaded ${data.length} rows from "${sheetName}"`);
+        console.log(`Total rows from sheet: ${rows.length - 1}`);
+        console.log(`Filtered rows with data: ${data.length}`);
+        
         return data;
         
       } catch (err) {
@@ -774,17 +794,20 @@
   async function loadData(token) {
     try {
       let data = [];
+      let source = '';
       
       // Try Sheets API first if we have a token
       if (token) {
         console.log('Loading from Google Sheets...');
         data = await loadSheetsUsingToken(token);
+        source = 'Google Sheets';
       }
       
       // If no data from Sheets, use sample data
       if (!data || data.length === 0) {
         console.log('Using sample data...');
         data = createSampleData(50);
+        source = 'Demo Data';
         document.getElementById('userEmail').textContent = 'Demo Mode (sample data)';
       } else {
         document.getElementById('userEmail').textContent = currentUser ? currentUser.email : 'Loaded from Google Sheets';
@@ -806,7 +829,10 @@
   
       // Start with table layout
       transformTo('table');
-      console.log('Total loaded rows:', count);
+      
+      // Update info display
+      document.getElementById('dataInfo').textContent = `${count} people loaded from ${source}`;
+      console.log(`Total loaded rows: ${count} from ${source}`);
       
     } catch (err) {
       console.error('loadData error:', err);
@@ -826,6 +852,8 @@
       buildDoubleHelixTargets(count);
       buildGridTargets(count);
       transformTo('table');
+      
+      document.getElementById('dataInfo').textContent = `${count} people loaded (fallback data)`;
     }
   }
   
