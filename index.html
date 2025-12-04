@@ -35,12 +35,16 @@
     }
     .controls button{ margin:4px; }
     .gsi-button-wrap { margin-bottom:8px; }
+    /* small responsive tweak */
+    @media (max-width:600px){
+      .controls{ width: 90%; left: 50%; transform: translateX(-50%); }
+    }
   </style>
 
-  <!-- three.js + CSS3DRenderer -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/examples/js/renderers/CSS3DRenderer.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/examples/js/controls/TrackballControls.js"></script>
+  <!-- Use Three.js r149 (preserves global THREE and examples) -->
+  <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r149/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r149/examples/js/renderers/CSS3DRenderer.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r149/examples/js/controls/TrackballControls.js"></script>
 
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -50,7 +54,8 @@
 
   <div class="controls" id="controls" aria-live="polite">
     <div class="gsi-button-wrap">
-      <div id="g_id_onload" 
+      <!-- keep data-client_id updated to your client ID -->
+      <div id="g_id_onload"
            data-client_id="330173954188-eighpf5lec4lccknriqa5gkt19mjv98e.apps.googleusercontent.com"
            data-auto_prompt="false">
       </div>
@@ -71,23 +76,23 @@
   </div>
 
 <script>
-/* ----------------- CONFIG ----------------- */
+/* ----------------- CONFIG: put your credentials here ----------------- */
 const CLIENT_ID = '330173954188-eighpf5lec4lccknriqa5gkt19mjv98e.apps.googleusercontent.com';
-const API_KEY = 'AIzaSyAt7SFLAOrKWIj2_-lyY_IpbBbWAc1Ie0Y';
+const API_KEY = 'AIzaSyAt7SFLAOrKWIj2_-lyY_IpbBbWAc1Ie0Y'; // REMEMBER: restrict this key in Google Cloud
 const SPREADSHEET_ID = '13-qIqTXm0Ilp-PsWVcxUX9QpxHi_KfjgXCoKhqfQfAY';
 const SHEET_RANGE = 'Sheet1!A1:F999';
-const CSV_PUBLISHED_URL = ''; // (optional fallback)
+const CSV_PUBLISHED_URL = ''; // optional public CSV fallback (if you publish the sheet to the web)
 
-/* ----------------- 3D / Scene Setup ----------------- */
+/* ----------------- THREE.JS / Scene Setup ----------------- */
 let camera, scene, renderer, controls;
 let objects = [];
 let targets = { table: [], sphere: [], helix: [], grid: [] };
 let itemsData = [];
 
-init();
+initThree();
 animate();
 
-function init() {
+function initThree(){
   const container = document.getElementById('container');
   camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 1, 10000);
   camera.position.z = 3000;
@@ -107,14 +112,14 @@ function init() {
   window.addEventListener('resize', onWindowResize, false);
 }
 
-function onWindowResize() {
+function onWindowResize(){
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   controls.handleResize();
 }
 
-function animate() {
+function animate(){
   requestAnimationFrame(animate);
   TWEEN.update();
   controls.update();
@@ -122,30 +127,35 @@ function animate() {
 }
 
 /* ----------------- Tile creation ----------------- */
-function createTile(row, idx) {
+function createTile(row, idx){
   const el = document.createElement('div');
   el.className = 'element';
 
-  // Net Worth logic
-  const net = parseNetWorth(row['Net Worth']);
+  const net = parseNetWorth(row['Net Worth'] || row['NetWorth'] || row['net worth'] || '');
   let bg = '#555';
   if (net < 100000) bg = '#c0392b';
   else if (net <= 200000) bg = '#d35400';
   else bg = '#27ae60';
   el.style.background = bg;
 
+  // Photo
   const img = document.createElement('img');
   img.className = 'photo';
+  img.alt = row['Name'] || '';
   img.src = row['Photo'] || 'https://via.placeholder.com/160x88?text=No+Photo';
   el.appendChild(img);
 
-  el.innerHTML += `
-    <div class="name">${row['Name']}</div>
-    <div class="meta">Age: ${row['Age']}</div>
-    <div class="meta">Country: ${row['Country']}</div>
-    <div class="meta">Interest: ${row['Interest']}</div>
-    <div class="meta">Net Worth: ${row['Net Worth']}</div>
-  `;
+  // text
+  const nameDiv = document.createElement('div'); nameDiv.className='name'; nameDiv.textContent = row['Name'] || '';
+  el.appendChild(nameDiv);
+  const ageDiv = document.createElement('div'); ageDiv.className='meta'; ageDiv.textContent = 'Age: ' + (row['Age'] || '');
+  el.appendChild(ageDiv);
+  const countryDiv = document.createElement('div'); countryDiv.className='meta'; countryDiv.textContent = 'Country: ' + (row['Country'] || '');
+  el.appendChild(countryDiv);
+  const interestDiv = document.createElement('div'); interestDiv.className='meta'; interestDiv.textContent = 'Interest: ' + (row['Interest'] || '');
+  el.appendChild(interestDiv);
+  const nwDiv = document.createElement('div'); nwDiv.className='meta'; nwDiv.textContent = 'Net Worth: ' + (row['Net Worth'] || row['NetWorth'] || '');
+  el.appendChild(nwDiv);
 
   const objectCSS = new THREE.CSS3DObject(el);
   objectCSS.position.x = Math.random()*4000 - 2000;
@@ -156,164 +166,235 @@ function createTile(row, idx) {
   objects.push(objectCSS);
 }
 
-function parseNetWorth(s) {
+/* ----------------- parse Net Worth (robust) ----------------- */
+function parseNetWorth(s){
   if (!s) return 0;
-  let n = String(s).replace(/[^0-9.]/g, '');
-  return parseFloat(n) || 0;
+  s = String(s).trim();
+  // Remove $ and commas, detect K/M
+  let mult = 1;
+  if (/[kK]$/.test(s)) { mult = 1e3; s = s.replace(/[kK]$/,''); }
+  if (/[mM]$/.test(s)) { mult = 1e6; s = s.replace(/[mM]$/,''); }
+  const n = parseFloat(s.replace(/[^0-9.]/g,'')) || 0;
+  return n * mult;
 }
 
-/* ----------------- Layout targets ----------------- */
-function buildTableTargets(count) {
+/* ----------------- Layout builders ----------------- */
+// Table 20x10
+function buildTableTargets(count){
   targets.table = [];
   const cols = 20, rows = 10;
-  const spaceX = 180, spaceY = 210;
-  const offX = (cols-1)*spaceX/2;
-  const offY = (rows-1)*spaceY/2;
-
+  const spacingX = 180, spacingY = 210;
+  const offsetX = (cols - 1) * spacingX / 2;
+  const offsetY = (rows - 1) * spacingY / 2;
   for (let i=0;i<count;i++){
     const col = i % cols;
-    const row = Math.floor(i / cols);
+    const row = Math.floor(i/cols);
     const obj = new THREE.Object3D();
-    obj.position.x = col*spaceX - offX;
-    obj.position.y = -(row*spaceY - offY);
+    obj.position.x = col * spacingX - offsetX;
+    obj.position.y = - (row * spacingY - offsetY);
+    obj.position.z = 0;
     targets.table.push(obj);
   }
 }
 
-function buildSphereTargets(count) {
+// Sphere
+function buildSphereTargets(count){
   targets.sphere = [];
   const radius = 900;
   for (let i=0;i<count;i++){
-    const phi = Math.acos(-1 + 2*i/count);
-    const theta = Math.sqrt(count*Math.PI)*phi;
+    const phi = Math.acos(-1 + (2 * i) / count );
+    const theta = Math.sqrt(count * Math.PI) * phi;
     const obj = new THREE.Object3D();
-    obj.position.x = radius * Math.cos(theta)*Math.sin(phi);
-    obj.position.y = radius * Math.sin(theta)*Math.sin(phi);
+    obj.position.x = radius * Math.cos(theta) * Math.sin(phi);
+    obj.position.y = radius * Math.sin(theta) * Math.sin(phi);
     obj.position.z = radius * Math.cos(phi);
     targets.sphere.push(obj);
   }
 }
 
-function buildDoubleHelixTargets(count) {
+// Double Helix (interleaved)
+function buildDoubleHelixTargets(count){
   targets.helix = [];
-  const sep = 70, stepY = 24;
-  const strandCount = Math.ceil(count/2);
-  const totalHeight = strandCount*stepY;
-
+  const separation = 70;
+  const spacingY = 24;
+  const totalPerStrand = Math.ceil(count / 2);
+  const totalHeight = totalPerStrand * spacingY;
   for (let i=0;i<count;i++){
     const strand = i % 2;
-    const idx = Math.floor(i/2);
-    const angle = idx*0.4 + (strand===0?0:Math.PI);
-
+    const idx = Math.floor(i / 2);
+    const angle = idx * 0.4 + (strand === 0 ? 0 : Math.PI);
     const obj = new THREE.Object3D();
-    obj.position.x = Math.cos(angle)*sep;
-    obj.position.z = Math.sin(angle)*sep;
-    obj.position.y = -(idx*stepY) + totalHeight/2;
-
+    obj.position.x = Math.cos(angle) * separation;
+    obj.position.z = Math.sin(angle) * separation;
+    obj.position.y = - (idx * spacingY) + (totalHeight/2);
     targets.helix.push(obj);
   }
 }
 
-function buildGridTargets(count) {
+// Grid 5x4x10
+function buildGridTargets(count){
   targets.grid = [];
-  const gx=5, gy=4, gz=10;
-  const d=240;
-  const ox=(gx-1)*d/2, oy=(gy-1)*d/2, oz=(gz-1)*d/2;
-
+  const gx = 5, gy = 4, gz = 10;
+  const spacing = 240;
+  const offsetX = (gx - 1) * spacing / 2;
+  const offsetY = (gy - 1) * spacing / 2;
+  const offsetZ = (gz - 1) * spacing / 2;
   for (let i=0;i<count;i++){
-    const x=i%gx;
-    const y=Math.floor(i/gx)%gy;
-    const z=Math.floor(i/(gx*gy))%gz;
-
+    const x = i % gx;
+    const y = Math.floor(i / gx) % gy;
+    const z = Math.floor(i / (gx * gy)) % gz;
     const obj = new THREE.Object3D();
-    obj.position.x = x*d - ox;
-    obj.position.y = -(y*d - oy);
-    obj.position.z = z*d - oz;
-
+    obj.position.x = x * spacing - offsetX;
+    obj.position.y = - (y * spacing - offsetY);
+    obj.position.z = z * spacing - offsetZ;
     targets.grid.push(obj);
   }
 }
 
 function transformTo(layout){
-  const targetArr = targets[layout];
-  if (!targetArr) return;
-
-  objects.forEach((obj,i)=>{
-    const target = targetArr[i];
-    if (!target) return;
-
-    new TWEEN.Tween(obj.position)
-      .to({x:target.position.x,y:target.position.y,z:target.position.z},1300)
-      .easing(TWEEN.Easing.Exponential.InOut).start();
-
-    new TWEEN.Tween(obj.rotation)
-      .to({x:0,y:0,z:0},1300)
-      .easing(TWEEN.Easing.Exponential.InOut).start();
-  });
+  const arr = targets[layout];
+  if (!arr) return;
+  for (let i=0;i<objects.length;i++){
+    const obj = objects[i];
+    const tgt = arr[i];
+    if (!tgt) continue;
+    new TWEEN.Tween(obj.position).to({ x: tgt.position.x, y: tgt.position.y, z: tgt.position.z }, 1300).easing(TWEEN.Easing.Exponential.InOut).start();
+    new TWEEN.Tween(obj.rotation).to({ x:0, y:0, z:0 }, 1300).easing(TWEEN.Easing.Exponential.InOut).start();
+  }
 }
 
-/* ----------------- Data Loading ----------------- */
-async function loadSheets(accessToken){
-  const url =
-`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_RANGE)}?majorDimension=ROWS`;
-
-  const res = await fetch(url,{ headers:{ Authorization:`Bearer ${accessToken}` }});
+/* ----------------- Data loading (Sheets API with OAuth token) ----------------- */
+async function loadSheetsUsingToken(accessToken){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_RANGE)}?majorDimension=ROWS`;
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken }});
+  if (!res.ok) {
+    const text = await res.text().catch(()=>'');
+    throw new Error('Sheets API error ' + res.status + ' ' + text);
+  }
   const json = await res.json();
-  const rows = json.values;
+  const rows = json.values || [];
+  if (rows.length < 1) return [];
   const headers = rows[0];
-
-  return rows.slice(1).map(r=>{
-    const obj={};
-    headers.forEach((h,i)=> obj[h] = r[i] || '');
+  return rows.slice(1).map(r => {
+    const obj = {};
+    for (let i=0;i<headers.length;i++) obj[headers[i]] = r[i] || '';
     return obj;
   });
 }
 
-async function loadData(token){
-  const data = await loadSheets(token);
+// CSV fallback (public publish)
+async function loadDataFromCsvUrl(url){
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('CSV fetch failed: ' + res.status);
+  const text = await res.text();
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+  const headers = lines[0].split(delim).map(h=>h.trim());
+  return lines.slice(1).map(line => {
+    const cols = line.split(delim);
+    const obj = {};
+    headers.forEach((h,i)=> obj[h] = (cols[i] || '').trim());
+    return obj;
+  });
+}
 
-  objects.forEach(o=>scene.remove(o));
-  objects = [];
+async function loadData(accessToken){
+  try {
+    let data = [];
+    if (accessToken && SPREADSHEET_ID) {
+      data = await loadSheetsUsingToken(accessToken);
+    } else if (CSV_PUBLISHED_URL) {
+      data = await loadDataFromCsvUrl(CSV_PUBLISHED_URL);
+    } else {
+      throw new Error('No access token and no CSV fallback configured.');
+    }
 
-  data.forEach((row,i)=> createTile(row,i));
+    // clear previous objects
+    objects.forEach(o => scene.remove(o));
+    objects = [];
 
-  buildTableTargets(data.length);
-  buildSphereTargets(data.length);
-  buildDoubleHelixTargets(data.length);
-  buildGridTargets(data.length);
+    data.forEach((row, idx) => createTile(row, idx));
 
-  transformTo('table');
+    const count = objects.length;
+    buildTableTargets(count);
+    buildSphereTargets(count);
+    buildDoubleHelixTargets(count);
+    buildGridTargets(count);
+
+    transformTo('table');
+    console.log('Loaded rows:', count);
+  } catch (err) {
+    console.error('loadData error:', err);
+    alert('Load data failed: ' + err.message);
+  }
 }
 
 function reloadData(){
   if (window.gapiAccessToken) loadData(window.gapiAccessToken);
+  else if (CSV_PUBLISHED_URL) loadData(null);
   else alert('Please sign in first.');
 }
 
-/* ----------------- Google Identity Services ----------------- */
-function initializeGSI(){
-  window.tokenClient = google.accounts.oauth2.initTokenClient({
+/* ----------------- Google Identity Services: robust init & token flow ----------------- */
+let tokenClient = null;
+
+function ensureGISReadyAndInit(){
+  if (!window.google || !google.accounts) {
+    // try again shortly until google.accounts is available
+    setTimeout(ensureGISReadyAndInit, 200);
+    return;
+  }
+
+  // Render the default sign-in button (the div .g_id_signin will be replaced by Google)
+  google.accounts.id.initialize({ client_id: CLIENT_ID });
+
+  // Create the token client for requesting access tokens for Sheets API
+  tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/userinfo.email',
-    callback: async (resp)=>{
-      window.gapiAccessToken = resp.access_token;
+    scope: 'openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/spreadsheets.readonly',
+    callback: async (resp) => {
+      // This is called after the user completes the consent flow and a token is returned (or an error)
+      console.log('tokenClient callback', resp);
+      if (resp.error) {
+        console.error('Token error', resp);
+        alert('Token error: ' + (resp.error_description || resp.error));
+        return;
+      }
+      const accessToken = resp.access_token;
+      window.gapiAccessToken = accessToken;
 
-      const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{
-        headers:{ Authorization:`Bearer ${resp.access_token}` }
-      }).then(r=>r.json());
+      // Fetch user info and update UI
+      try {
+        const userInfo = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: 'Bearer ' + accessToken }
+        }).then(r => r.json());
+        document.getElementById('userEmail').textContent = userInfo.email || 'signed in';
+      } catch(e) {
+        console.warn('userinfo fetch failed', e);
+        document.getElementById('userEmail').textContent = 'signed in';
+      }
 
-      document.getElementById('userEmail').textContent = info.email;
-      loadData(resp.access_token);
+      // Load the sheet data now that we have a token
+      await loadData(accessToken);
     }
   });
 
-  document.querySelector('.g_id_signin')
-    .addEventListener('click',()=> window.tokenClient.requestAccessToken({prompt:'consent'}));
+  // Attach a delegated click listener to the document so the GIS-provided button (which is rendered async)
+  // can be handled reliably even if browser replaced/rewrote the button markup after our script ran.
+  document.body.addEventListener('click', (e) => {
+    const btn = e.target.closest('.g_id_signin');
+    if (!btn) return;
+    // Request access token - prompt consent each time for clarity during dev
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  });
 }
 
-window.addEventListener('load', initializeGSI);
+// Start GIS init when page loads
+window.addEventListener('load', () => {
+  ensureGISReadyAndInit();
+});
 
-/* ----------------- Minimal Tween ----------------- */
+/* ----------------- Minimal Tween (kept small) ----------------- */
 !function(global){var TWEEN={_tweens:[],getAll:function(){return TWEEN._tweens},removeAll:function(){TWEEN._tweens=[]},add:function(t){TWEEN._tweens.push(t)},remove:function(t){var i=TWEEN._tweens.indexOf(t);if(i!==-1)TWEEN._tweens.splice(i,1)},update:function(time){if(TWEEN._tweens.length===0)return false;time=time!==undefined?time:Date.now();var i=0;while(i<TWEEN._tweens.length){if(TWEEN._tweens[i].update(time))i++;else TWEEN._tweens.splice(i,1)}return true}};TWEEN.Tween=function(object){this.object=object;this.valuesStart={};this.valuesEnd={};this.duration=1000;this.easing=function(k){return k};this.startTime=null;for(var field in object)this.valuesStart[field]=parseFloat(object[field],10)||0};TWEEN.Tween.prototype.to=function(properties,duration){this.valuesEnd=properties;if(duration!==undefined)this.duration=duration;return this};TWEEN.Tween.prototype.start=function(time){TWEEN.add(this);this.startTime=time!==undefined?time:Date.now();for(var property in this.valuesEnd){if(this.object[property]===undefined)continue;this.valuesStart[property]=this.object[property];}return this};TWEEN.Tween.prototype.easing=function(fn){this.easing=fn;return this};TWEEN.Tween.prototype.update=function(time){if(time<this.startTime)return true;var elapsed=(time-this.startTime)/this.duration;elapsed=elapsed>1?1:elapsed;var value=this.easing(elapsed);for(var property in this.valuesEnd){var start=this.valuesStart[property]||0;var end=this.valuesEnd[property];this.object[property]=start+(end-start)*value;}if(elapsed==1){return false}return true};TWEEN.Easing={Exponential:{InOut:function(k){if((k*=2)<1)return 0.5*Math.pow(2,10*(k-1));return 0.5*(-Math.pow(2,-10*(k-1))+2)}}};global.TWEEN=TWEEN}(this);
 </script>
 </body>
