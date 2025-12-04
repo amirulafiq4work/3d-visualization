@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>3D People Tiles — Periodic Table Modified</title>
+  <title>3D People Tiles Visualization</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body { font-family: Arial, Helvetica, sans-serif; margin:0; overflow:hidden; background:#111; color:#fff; }
@@ -68,10 +68,374 @@
     }
   </style>
 
-  <!-- Use Three.js r149 (preserves global THREE and examples) -->
-  <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r149/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r149/examples/js/renderers/CSS3DRenderer.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r149/examples/js/controls/TrackballControls.js"></script>
+  <!-- Use Three.js from official CDN with CSS3DRenderer -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/three.min.js"></script>
+  <!-- CSS3DRenderer as separate script -->
+  <script>
+  // CSS3DRenderer for Three.js r149
+  THREE.CSS3DObject = function ( element ) {
+  	THREE.Object3D.call( this );
+  	this.element = element;
+  	this.element.style.position = 'absolute';
+  	this.element.style.pointerEvents = 'auto';
+  	this.addEventListener( 'removed', function () {
+  		this.traverse( function ( object ) {
+  			if ( object.element instanceof Element && object.element.parentNode !== null ) {
+  				object.element.parentNode.removeChild( object.element );
+  			}
+  		} );
+  	} );
+  };
+  THREE.CSS3DObject.prototype = Object.create( THREE.Object3D.prototype );
+  THREE.CSS3DObject.prototype.constructor = THREE.CSS3DObject;
+  THREE.CSS3DSprite = function ( element ) {
+  	THREE.CSS3DObject.call( this, element );
+  };
+  THREE.CSS3DSprite.prototype = Object.create( THREE.CSS3DObject.prototype );
+  THREE.CSS3DSprite.prototype.constructor = THREE.CSS3DSprite;
+  THREE.CSS3DRenderer = function () {
+  	var _this = this;
+  	var _width, _height;
+  	var _widthHalf, _heightHalf;
+  	var _matrix = new THREE.Matrix4();
+  	var domElement = document.createElement( 'div' );
+  	domElement.style.overflow = 'hidden';
+  	this.domElement = domElement;
+  	this.setSize = function ( width, height ) {
+  		_width = width;
+  		_height = height;
+  		_widthHalf = _width / 2;
+  		_heightHalf = _height / 2;
+  		domElement.style.width = width + 'px';
+  		domElement.style.height = height + 'px';
+  	};
+  	var epsilon = function ( value ) {
+  		return Math.abs( value ) < 1e-10 ? 0 : value;
+  	};
+  	var getCameraCSSMatrix = function ( matrix ) {
+  		var elements = matrix.elements;
+  		return 'matrix3d(' +
+  			epsilon( elements[ 0 ] ) + ',' +
+  			epsilon( - elements[ 1 ] ) + ',' +
+  			epsilon( elements[ 2 ] ) + ',' +
+  			epsilon( elements[ 3 ] ) + ',' +
+  			epsilon( elements[ 4 ] ) + ',' +
+  			epsilon( - elements[ 5 ] ) + ',' +
+  			epsilon( elements[ 6 ] ) + ',' +
+  			epsilon( elements[ 7 ] ) + ',' +
+  			epsilon( elements[ 8 ] ) + ',' +
+  		epsilon( - elements[ 9 ] ) + ',' +
+  			epsilon( elements[ 10 ] ) + ',' +
+  			epsilon( elements[ 11 ] ) + ',' +
+  			epsilon( elements[ 12 ] ) + ',' +
+  			epsilon( - elements[ 13 ] ) + ',' +
+  			epsilon( elements[ 14 ] ) + ',' +
+  			epsilon( elements[ 15 ] ) +
+  		')';
+  	};
+  	var getObjectCSSMatrix = function ( matrix ) {
+  		var elements = matrix.elements;
+  		return 'translate3d(-50%,-50%,0) matrix3d(' +
+  			epsilon( elements[ 0 ] ) + ',' +
+  			epsilon( elements[ 1 ] ) + ',' +
+  			epsilon( elements[ 2 ] ) + ',' +
+  			epsilon( elements[ 3 ] ) + ',' +
+  			epsilon( - elements[ 4 ] ) + ',' +
+  			epsilon( - elements[ 5 ] ) + ',' +
+  			epsilon( - elements[ 6 ] ) + ',' +
+  			epsilon( - elements[ 7 ] ) + ',' +
+  			epsilon( elements[ 8 ] ) + ',' +
+  			epsilon( elements[ 9 ] ) + ',' +
+  			epsilon( elements[ 10 ] ) + ',' +
+  			epsilon( elements[ 11 ] ) + ',' +
+  			epsilon( elements[ 12 ] ) + ',' +
+  			epsilon( elements[ 13 ] ) + ',' +
+  			epsilon( elements[ 14 ] ) + ',' +
+  			epsilon( elements[ 15 ] ) +
+  		')';
+  	};
+  	var renderObject = function ( object, scene, camera ) {
+  		if ( object instanceof THREE.CSS3DObject ) {
+  			var style;
+  			if ( object instanceof THREE.CSS3DSprite ) {
+  				var angle = Math.atan2( object.position.x - camera.position.x, object.position.z - camera.position.z );
+  				var style = 'rotateY(' + angle + 'rad)';
+  				if ( object.element.style.transform !== style ) {
+  					object.element.style.transform = style;
+  				}
+  				style = 'translate(' + ( - _widthHalf + object.position.x * _widthHalf ) + 'px,' + ( - _heightHalf - object.position.y * _heightHalf ) + 'px)';
+  			} else {
+  				_matrix.copy( camera.matrixWorldInverse );
+  				_matrix.multiply( object.matrixWorld );
+  				style = getObjectCSSMatrix( _matrix );
+  			}
+  			if ( object.element.style.transform !== style ) {
+  				object.element.style.transform = style;
+  			}
+  			if ( object.element.parentNode !== domElement ) {
+  				domElement.appendChild( object.element );
+  			}
+  		}
+  		for ( var i = 0, l = object.children.length; i < l; i ++ ) {
+  			renderObject( object.children[ i ], scene, camera );
+  		}
+  	};
+  	this.render = function ( scene, camera ) {
+  		scene.updateMatrixWorld();
+  		if ( camera.parent === null ) camera.updateMatrixWorld();
+  		_matrix.copy( camera.matrixWorldInverse );
+  		_matrix.multiply( scene.matrixWorld );
+  		renderObject( scene, scene, camera );
+  	};
+  };
+  </script>
+  <!-- TrackballControls -->
+  <script>
+  // Simplified TrackballControls for Three.js r149
+  THREE.TrackballControls = function ( object, domElement ) {
+  	var _this = this;
+  	var STATE = { NONE: - 1, ROTATE: 0, ZOOM: 1, PAN: 2, TOUCH_ROTATE: 3, TOUCH_ZOOM_PAN: 4 };
+  	this.object = object;
+  	this.domElement = ( domElement !== undefined ) ? domElement : document;
+  	this.enabled = true;
+  	this.screen = { left: 0, top: 0, width: 0, height: 0 };
+  	this.rotateSpeed = 1.0;
+  	this.zoomSpeed = 1.2;
+  	this.panSpeed = 0.3;
+  	this.noRotate = false;
+  	this.noZoom = false;
+  	this.noPan = false;
+  	this.staticMoving = false;
+  	this.dynamicDampingFactor = 0.2;
+  	this.minDistance = 0;
+  	this.maxDistance = Infinity;
+  	this.keys = [ 65 /*A*/, 83 /*S*/, 68 /*D*/ ];
+  	var EPS = 0.000001;
+  	var lastPosition = new THREE.Vector3();
+  	var _state = STATE.NONE,
+  	_prevState = STATE.NONE,
+  	_eye = new THREE.Vector3(),
+  	_movePrev = new THREE.Vector2(),
+  	_moveCurr = new THREE.Vector2(),
+  	_lastAxis = new THREE.Vector3(),
+  	_lastAngle = 0,
+  	_zoomStart = new THREE.Vector2(),
+  	_zoomEnd = new THREE.Vector2(),
+  	_touchZoomDistanceStart = 0,
+  	_touchZoomDistanceEnd = 0,
+  	_panStart = new THREE.Vector2(),
+  	_panEnd = new THREE.Vector2();
+  	this.target = new THREE.Vector3();
+  	var changeEvent = { type: 'change' };
+  	var startEvent = { type: 'start' };
+  	var endEvent = { type: 'end' };
+  	this.rotateCamera = (function() {
+  		var axis = new THREE.Vector3(),
+  			quaternion = new THREE.Quaternion(),
+  			eyeDirection = new THREE.Vector3(),
+  			objectUpDirection = new THREE.Vector3(),
+  			objectSidewaysDirection = new THREE.Vector3(),
+  			moveDirection = new THREE.Vector3(),
+  			angle;
+  		return function rotateCamera() {
+  			moveDirection.set( _moveCurr.x - _movePrev.x, _moveCurr.y - _movePrev.y, 0 );
+  			angle = moveDirection.length();
+  			if ( angle ) {
+  				_eye.copy( _this.object.position ).sub( _this.target );
+  				eyeDirection.copy( _eye ).normalize();
+  				objectUpDirection.copy( _this.object.up ).normalize();
+  				objectSidewaysDirection.crossVectors( objectUpDirection, eyeDirection ).normalize();
+  				objectUpDirection.setLength( _moveCurr.y - _movePrev.y );
+  				objectSidewaysDirection.setLength( _moveCurr.x - _movePrev.x );
+  				moveDirection.copy( objectUpDirection.add( objectSidewaysDirection ) );
+  				axis.crossVectors( moveDirection, _eye ).normalize();
+  				angle *= _this.rotateSpeed;
+  				quaternion.setFromAxisAngle( axis, angle );
+  				_eye.applyQuaternion( quaternion );
+  				_this.object.up.applyQuaternion( quaternion );
+  				_lastAxis.copy( axis );
+  				_lastAngle = angle;
+  			} else if ( ! _this.staticMoving && _lastAngle ) {
+  				_lastAngle *= Math.sqrt( 1.0 - _this.dynamicDampingFactor );
+  				_eye.copy( _this.object.position ).sub( _this.target );
+  				quaternion.setFromAxisAngle( _lastAxis, _lastAngle );
+  				_eye.applyQuaternion( quaternion );
+  				_this.object.up.applyQuaternion( quaternion );
+  			}
+  			_movePrev.copy( _moveCurr );
+  		};
+  	}());
+  	this.zoomCamera = function () {
+  		var factor;
+  		if ( _state === STATE.TOUCH_ZOOM_PAN ) {
+  			factor = _touchZoomDistanceStart / _touchZoomDistanceEnd;
+  			_touchZoomDistanceStart = _touchZoomDistanceEnd;
+  			_eye.multiplyScalar( factor );
+  		} else {
+  			factor = 1.0 + ( _zoomEnd.y - _zoomStart.y ) * _this.zoomSpeed;
+  			if ( factor !== 1.0 && factor > 0.0 ) {
+  				_eye.multiplyScalar( factor );
+  				if ( _this.staticMoving ) {
+  					_zoomStart.copy( _zoomEnd );
+  				} else {
+  					_zoomStart.y += ( _zoomEnd.y - _zoomStart.y ) * this.dynamicDampingFactor;
+  				}
+  			}
+  		}
+  	};
+  	this.panCamera = (function() {
+  		var mouseChange = new THREE.Vector2(),
+  			objectUp = new THREE.Vector3(),
+  			pan = new THREE.Vector3();
+  		return function panCamera() {
+  			mouseChange.copy( _panEnd ).sub( _panStart );
+  			if ( mouseChange.lengthSq() ) {
+  				mouseChange.multiplyScalar( _eye.length() * _this.panSpeed );
+  				pan.copy( _eye ).cross( _this.object.up ).setLength( mouseChange.x );
+  				pan.add( objectUp.copy( _this.object.up ).setLength( mouseChange.y ) );
+  				_this.object.position.add( pan );
+  				_this.target.add( pan );
+  				if ( _this.staticMoving ) {
+  					_panStart.copy( _panEnd );
+  				} else {
+  					_panStart.add( mouseChange.subVectors( _panEnd, _panStart ).multiplyScalar( _this.dynamicDampingFactor ) );
+  				}
+  			}
+  		};
+  	}());
+  	this.checkDistances = function () {
+  		if ( ! _this.noZoom || ! _this.noPan ) {
+  			if ( _eye.lengthSq() > _this.maxDistance * _this.maxDistance ) {
+  				_this.object.position.addVectors( _this.target, _eye.setLength( _this.maxDistance ) );
+  				_zoomStart.copy( _zoomEnd );
+  			}
+  			if ( _eye.lengthSq() < _this.minDistance * _this.minDistance ) {
+  				_this.object.position.addVectors( _this.target, _eye.setLength( _this.minDistance ) );
+  				_zoomStart.copy( _zoomEnd );
+  			}
+  		}
+  	};
+  	this.update = function () {
+  		_eye.subVectors( _this.object.position, _this.target );
+  		if ( ! _this.noRotate ) {
+  			_this.rotateCamera();
+  		}
+  		if ( ! _this.noZoom ) {
+  			_this.zoomCamera();
+  		}
+  		if ( ! _this.noPan ) {
+  			_this.panCamera();
+  		}
+  		_this.object.position.addVectors( _this.target, _eye );
+  		_this.checkDistances();
+  		_this.object.lookAt( _this.target );
+  		if ( lastPosition.distanceToSquared( _this.object.position ) > EPS ) {
+  			_this.dispatchEvent( changeEvent );
+  			lastPosition.copy( _this.object.position );
+  		}
+  	};
+  	this.reset = function () {
+  		_state = STATE.NONE;
+  		_prevState = STATE.NONE;
+  		_this.target.copy( _this.target0 );
+  		_this.object.position.copy( _this.position0 );
+  		_this.object.up.copy( _this.up0 );
+  		_eye.subVectors( _this.object.position, _this.target );
+  		_this.object.lookAt( _this.target );
+  		_this.dispatchEvent( changeEvent );
+  		lastPosition.copy( _this.object.position );
+  	};
+  	this.handleResize = function () {
+  		if ( this.domElement === document ) {
+  			this.screen.left = 0;
+  			this.screen.top = 0;
+  			this.screen.width = window.innerWidth;
+  			this.screen.height = window.innerHeight;
+  		} else {
+  			var box = this.domElement.getBoundingClientRect();
+  			this.screen.left = box.left + document.body.scrollLeft;
+  			this.screen.top = box.top + document.body.scrollTop;
+  			this.screen.width = box.width;
+  			this.screen.height = box.height;
+  		}
+  	};
+  	var getMouseOnScreen = (function () {
+  		var vector = new THREE.Vector2();
+  		return function getMouseOnScreen( pageX, pageY ) {
+  			vector.set(
+  				( pageX - _this.screen.left ) / _this.screen.width,
+  				( pageY - _this.screen.top ) / _this.screen.height
+  			);
+  			return vector;
+  		};
+  	}());
+  	var getMouseOnCircle = (function () {
+  		var vector = new THREE.Vector2();
+  		return function getMouseOnCircle( pageX, pageY ) {
+  			vector.set(
+  				( ( pageX - _this.screen.width * 0.5 - _this.screen.left ) / ( _this.screen.width * 0.5 ) ),
+  				( ( _this.screen.height + 2 * ( _this.screen.top - pageY ) ) / _this.screen.width )
+  			);
+  			return vector;
+  		};
+  	}());
+  	this.handleEvent = function ( event ) {
+  		if ( typeof this[ event.type ] == 'function' ) {
+  			this[ event.type ]( event );
+  		}
+  	};
+  	var mousedown = function ( event ) {
+  		if ( _this.enabled === false ) return;
+  		event.preventDefault();
+  		if ( event.button === 0 ) {
+  			_state = STATE.ROTATE;
+  		} else if ( event.button === 1 ) {
+  			_state = STATE.ZOOM;
+  		} else if ( event.button === 2 ) {
+  			_state = STATE.PAN;
+  		}
+  		_prevState = _state;
+  		if ( _state === STATE.ROTATE && ! _this.noRotate ) {
+  			_moveCurr.copy( getMouseOnCircle( event.pageX, event.pageY ) );
+  			_movePrev.copy( _moveCurr );
+  		} else if ( _state === STATE.ZOOM && ! _this.noZoom ) {
+  			_zoomStart.copy( getMouseOnScreen( event.pageX, event.pageY ) );
+  			_zoomEnd.copy( _zoomStart );
+  		} else if ( _state === STATE.PAN && ! _this.noPan ) {
+  			_panStart.copy( getMouseOnScreen( event.pageX, event.pageY ) );
+  			_panEnd.copy( _panStart );
+  		}
+  		document.addEventListener( 'mousemove', mousemove, false );
+  		document.addEventListener( 'mouseup', mouseup, false );
+  		_this.dispatchEvent( startEvent );
+  	};
+  	var mousemove = function ( event ) {
+  		if ( _this.enabled === false ) return;
+  		event.preventDefault();
+  		if ( _state === STATE.ROTATE && ! _this.noRotate ) {
+  			_moveCurr.copy( getMouseOnCircle( event.pageX, event.pageY ) );
+  		} else if ( _state === STATE.ZOOM && ! _this.noZoom ) {
+  			_zoomEnd.copy( getMouseOnScreen( event.pageX, event.pageY ) );
+  		} else if ( _state === STATE.PAN && ! _this.noPan ) {
+  			_panEnd.copy( getMouseOnScreen( event.pageX, event.pageY ) );
+  		}
+  	};
+  	var mouseup = function ( event ) {
+  		if ( _this.enabled === false ) return;
+  		event.preventDefault();
+  		_state = STATE.NONE;
+  		document.removeEventListener( 'mousemove', mousemove );
+  		document.removeEventListener( 'mouseup', mouseup );
+  		_this.dispatchEvent( endEvent );
+  	};
+  	this.domElement.addEventListener( 'contextmenu', function ( event ) { event.preventDefault(); }, false );
+  	this.domElement.addEventListener( 'mousedown', mousedown, false );
+  	this.handleResize();
+  	window.addEventListener( 'resize', this.handleResize, false );
+  };
+  THREE.TrackballControls.prototype = Object.create( THREE.EventDispatcher.prototype );
+  THREE.TrackballControls.prototype.constructor = THREE.TrackballControls;
+  </script>
 
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -99,12 +463,9 @@
   </div>
 
 <script>
-/* ----------------- CONFIG: put your credentials here ----------------- */
+/* ----------------- CONFIG ----------------- */
 const CLIENT_ID = '330173954188-eighpf5lec4lccknriqa5gkt19mjv98e.apps.googleusercontent.com';
-const API_KEY = 'AIzaSyAt7SFLAOrKWIj2_-lyY_IpbBbWAc1Ie0Y';
 const SPREADSHEET_ID = '13-qIqTXm0Ilp-PsWVcxUX9QpxHi_KfjgXCoKhqfQfAY';
-const SHEET_RANGE = 'Data Template!A1:F999';
-const CSV_PUBLISHED_URL = ''; // optional public CSV fallback
 
 /* ----------------- Auth State ----------------- */
 let accessToken = null;
@@ -114,7 +475,6 @@ let currentUser = null;
 let camera, scene, renderer, controls;
 let objects = [];
 let targets = { table: [], sphere: [], helix: [], grid: [] };
-let itemsData = [];
 
 initThree();
 animate();
@@ -123,19 +483,15 @@ function initThree() {
   const container = document.getElementById('container');
   camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 10000);
   camera.position.z = 3000;
-
   scene = new THREE.Scene();
-
   renderer = new THREE.CSS3DRenderer();
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.domElement.style.position = 'absolute';
   container.appendChild(renderer.domElement);
-
   controls = new THREE.TrackballControls(camera, renderer.domElement);
   controls.rotateSpeed = 0.5;
   controls.minDistance = 500;
   controls.maxDistance = 6000;
-
   window.addEventListener('resize', onWindowResize, false);
 }
 
@@ -157,7 +513,6 @@ function animate() {
 function createTile(row, idx) {
   const el = document.createElement('div');
   el.className = 'element';
-
   const net = parseNetWorth(row['Net Worth'] || row['NetWorth'] || row['net worth'] || '');
   let bg = '#555';
   if (net < 100000) bg = '#c0392b';
@@ -165,14 +520,12 @@ function createTile(row, idx) {
   else bg = '#27ae60';
   el.style.background = bg;
 
-  // Photo
   const img = document.createElement('img');
   img.className = 'photo';
   img.alt = row['Name'] || '';
   img.src = row['Photo'] || 'https://via.placeholder.com/160x88?text=No+Photo';
   el.appendChild(img);
 
-  // Text content
   const nameDiv = document.createElement('div');
   nameDiv.className = 'name';
   nameDiv.textContent = row['Name'] || '';
@@ -198,16 +551,15 @@ function createTile(row, idx) {
   nwDiv.textContent = 'Net Worth: ' + (row['Net Worth'] || row['NetWorth'] || '');
   el.appendChild(nwDiv);
 
+  // FIXED: CSS3DObject is now properly defined
   const objectCSS = new THREE.CSS3DObject(el);
   objectCSS.position.x = Math.random() * 4000 - 2000;
   objectCSS.position.y = Math.random() * 4000 - 2000;
   objectCSS.position.z = Math.random() * 4000 - 2000;
-
   scene.add(objectCSS);
   objects.push(objectCSS);
 }
 
-/* ----------------- parse Net Worth (robust) ----------------- */
 function parseNetWorth(s) {
   if (!s) return 0;
   s = String(s).trim();
@@ -301,36 +653,87 @@ function transformTo(layout) {
 
 /* ----------------- Data loading ----------------- */
 async function loadSheetsUsingToken(accessToken) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_RANGE)}?majorDimension=ROWS`;
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error('Sheets API error ' + res.status + ' ' + text);
+  console.log('Trying to load sheet with token...');
+  
+  // Try different sheet names
+  const sheetNames = [
+    'Sheet1',
+    'Data Template',
+    'Sheet 1',
+    'Sheet 2',
+    'Sheet 3',
+    'Sheet4'
+  ];
+  
+  let lastError = null;
+  
+  for (const sheetName of sheetNames) {
+    try {
+      const range = `${sheetName}!A1:F999`;
+      console.log(`Trying range: ${range}`);
+      
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?majorDimension=ROWS`;
+      const res = await fetch(url, { 
+        headers: { 
+          Authorization: 'Bearer ' + accessToken,
+          'Content-Type': 'application/json'
+        } 
+      });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.log(`Failed with sheet name "${sheetName}": ${res.status}`);
+        lastError = new Error(`Sheets API error ${res.status}: ${errorText}`);
+        continue; // Try next sheet name
+      }
+      
+      const json = await res.json();
+      console.log(`Success with sheet name: "${sheetName}"`);
+      
+      const rows = json.values || [];
+      if (rows.length < 1) {
+        console.log('No data found');
+        return [];
+      }
+      
+      const headers = rows[0];
+      const data = rows.slice(1).map(r => {
+        const obj = {};
+        for (let i = 0; i < headers.length; i++) {
+          obj[headers[i]] = r[i] || '';
+        }
+        return obj;
+      });
+      
+      console.log(`Loaded ${data.length} rows from "${sheetName}"`);
+      return data;
+      
+    } catch (err) {
+      lastError = err;
+      continue;
+    }
   }
-  const json = await res.json();
-  const rows = json.values || [];
-  if (rows.length < 1) return [];
-  const headers = rows[0];
-  return rows.slice(1).map(r => {
-    const obj = {};
-    for (let i = 0; i < headers.length; i++) obj[headers[i]] = r[i] || '';
-    return obj;
-  });
-}
-
-async function loadDataFromCsvUrl(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('CSV fetch failed: ' + res.status);
-  const text = await res.text();
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  const delim = lines[0].includes('\t') ? '\t' : ',';
-  const headers = lines[0].split(delim).map(h => h.trim());
-  return lines.slice(1).map(line => {
-    const cols = line.split(delim);
-    const obj = {};
-    headers.forEach((h, i) => obj[h] = (cols[i] || '').trim());
-    return obj;
-  });
+  
+  // If all sheet names fail, try getting sheet metadata
+  try {
+    console.log('All sheet names failed, trying to get sheet metadata...');
+    const metadataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`;
+    const res = await fetch(metadataUrl, { 
+      headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    
+    if (res.ok) {
+      const metadata = await res.json();
+      console.log('Available sheets:', metadata.sheets.map(s => s.properties.title));
+      alert('Available sheets in your spreadsheet: ' + 
+            metadata.sheets.map(s => s.properties.title).join(', ') + 
+            '\n\nPlease update the sheet name in the code.');
+    }
+  } catch (metadataErr) {
+    console.error('Could not get sheet metadata:', metadataErr);
+  }
+  
+  throw lastError || new Error('Could not find valid sheet');
 }
 
 async function loadData(token) {
@@ -338,18 +741,14 @@ async function loadData(token) {
     let data = [];
     
     // Try Sheets API first if we have a token
-    if (token && SPREADSHEET_ID) {
+    if (token) {
       console.log('Loading from Google Sheets...');
       data = await loadSheetsUsingToken(token);
     }
-    // Try CSV fallback
-    else if (CSV_PUBLISHED_URL) {
-      console.log('Loading from CSV...');
-      data = await loadDataFromCsvUrl(CSV_PUBLISHED_URL);
-    }
-    // Create sample data if no sources available
-    else {
-      console.log('Creating sample data...');
+    
+    // If no data from Sheets, use sample data
+    if (!data || data.length === 0) {
+      console.log('Using sample data...');
       data = createSampleData(50);
       document.getElementById('userEmail').textContent = 'Demo Mode (sample data)';
     }
@@ -370,11 +769,26 @@ async function loadData(token) {
 
     // Start with table layout
     transformTo('table');
-    console.log('Loaded rows:', count);
+    console.log('Total loaded rows:', count);
     
   } catch (err) {
     console.error('loadData error:', err);
-    alert('Load data failed: ' + err.message);
+    
+    // Fallback to sample data on error
+    console.log('Falling back to sample data...');
+    const sampleData = createSampleData(50);
+    document.getElementById('userEmail').textContent = 'Demo Mode (fallback data)';
+    
+    objects.forEach(o => scene.remove(o));
+    objects = [];
+    sampleData.forEach((row, idx) => createTile(row, idx));
+    
+    const count = objects.length;
+    buildTableTargets(count);
+    buildSphereTargets(count);
+    buildDoubleHelixTargets(count);
+    buildGridTargets(count);
+    transformTo('table');
   }
 }
 
@@ -417,7 +831,6 @@ function initGoogleSignIn() {
     ux_mode: 'popup'
   });
   
-  // Render the sign-in button
   google.accounts.id.renderButton(
     document.getElementById('g_id_signin'),
     { 
@@ -429,7 +842,6 @@ function initGoogleSignIn() {
     }
   );
   
-  // Try to sign in automatically
   google.accounts.id.prompt();
 }
 
@@ -443,7 +855,6 @@ function handleCredentialResponse(response) {
     currentUser = userObj;
     document.getElementById('userEmail').textContent = userObj.email || userObj.name || 'Signed in';
     
-    // Get access token for Sheets API
     getAccessTokenForSheets();
   } else {
     console.error('Sign-in failed');
@@ -480,8 +891,6 @@ function getAccessTokenForSheets() {
       
       console.log('Got access token!');
       accessToken = tokenResponse.access_token;
-      
-      // Load data with the token
       await loadData(accessToken);
     }
   });
@@ -495,7 +904,7 @@ function reloadData() {
   } else if (currentUser) {
     getAccessTokenForSheets();
   } else {
-    alert('Please sign in first using the Google button.');
+    loadData(null); // Load sample data
   }
 }
 
@@ -511,11 +920,8 @@ function signOut() {
   accessToken = null;
   document.getElementById('userEmail').textContent = 'not signed in';
   
-  // Clear the scene
   objects.forEach(o => scene.remove(o));
   objects = [];
-  
-  // Show sign-in button again
   initGoogleSignIn();
 }
 
@@ -523,7 +929,7 @@ function signOut() {
 window.addEventListener('load', () => {
   initGoogleSignIn();
   
-  // Load demo data immediately (no need to wait for sign-in)
+  // Load demo data immediately
   setTimeout(() => {
     if (!accessToken) {
       console.log('Loading demo data...');
@@ -532,9 +938,8 @@ window.addEventListener('load', () => {
   }, 1000);
 });
 
-/* ----------------- Minimal Tween (kept small) ----------------- */
+/* ----------------- Minimal Tween ----------------- */
 !function(global){var TWEEN={_tweens:[],getAll:function(){return TWEEN._tweens},removeAll:function(){TWEEN._tweens=[]},add:function(t){TWEEN._tweens.push(t)},remove:function(t){var i=TWEEN._tweens.indexOf(t);if(i!==-1)TWEEN._tweens.splice(i,1)},update:function(time){if(TWEEN._tweens.length===0)return false;time=time!==undefined?time:Date.now();var i=0;while(i<TWEEN._tweens.length){if(TWEEN._tweens[i].update(time))i++;else TWEEN._tweens.splice(i,1)}return true}};TWEEN.Tween=function(object){this.object=object;this.valuesStart={};this.valuesEnd={};this.duration=1000;this.easing=function(k){return k};this.startTime=null;for(var field in object)this.valuesStart[field]=parseFloat(object[field],10)||0};TWEEN.Tween.prototype.to=function(properties,duration){this.valuesEnd=properties;if(duration!==undefined)this.duration=duration;return this};TWEEN.Tween.prototype.start=function(time){TWEEN.add(this);this.startTime=time!==undefined?time:Date.now();for(var property in this.valuesEnd){if(this.object[property]===undefined)continue;this.valuesStart[property]=this.object[property];}return this};TWEEN.Tween.prototype.easing=function(fn){this.easing=fn;return this};TWEEN.Tween.prototype.update=function(time){if(time<this.startTime)return true;var elapsed=(time-this.startTime)/this.duration;elapsed=elapsed>1?1:elapsed;var value=this.easing(elapsed);for(var property in this.valuesEnd){var start=this.valuesStart[property]||0;var end=this.valuesEnd[property];this.object[property]=start+(end-start)*value;}if(elapsed==1){return false}return true};TWEEN.Easing={Exponential:{InOut:function(k){if((k*=2)<1)return 0.5*Math.pow(2,10*(k-1));return 0.5*(-Math.pow(2,-10*(k-1))+2)}}};global.TWEEN=TWEEN}(this);
 </script>
 </body>
 </html>
-
