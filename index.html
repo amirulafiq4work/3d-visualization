@@ -17,6 +17,12 @@
       text-align: left;
       font-size: 12px;
       overflow: hidden;
+      transition: transform 0.3s ease;
+    }
+    .element:hover {
+      transform: scale(1.05);
+      z-index: 100;
+      position: relative;
     }
     .photo {
       width: 100%;
@@ -32,12 +38,33 @@
       position: absolute; left: 12px; top: 12px; z-index: 5;
       background: rgba(255,255,255,0.95); color:#000; padding: 10px; border-radius:8px;
       font-size:13px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
-    .controls button{ margin:4px; }
+    .controls button{ 
+      margin:4px; 
+      padding: 6px 12px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .controls button:hover {
+      background: #3367d6;
+    }
     .gsi-button-wrap { margin-bottom:8px; }
+    .status {
+      margin-top: 8px;
+      padding: 4px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      font-size: 12px;
+    }
     /* small responsive tweak */
     @media (max-width:600px){
       .controls{ width: 90%; left: 50%; transform: translateX(-50%); }
+      .controls button{ display: block; width: 100%; margin: 4px 0; }
     }
   </style>
 
@@ -54,12 +81,7 @@
 
   <div class="controls" id="controls" aria-live="polite">
     <div class="gsi-button-wrap">
-      <!-- keep data-client_id updated to your client ID -->
-      <div id="g_id_onload"
-           data-client_id="330173954188-eighpf5lec4lccknriqa5gkt19mjv98e.apps.googleusercontent.com"
-           data-auto_prompt="false">
-      </div>
-      <div class="g_id_signin" data-type="standard" data-theme="outline" data-size="large" data-text="signin_with"></div>
+      <div id="g_id_signin"></div>
     </div>
 
     <div>
@@ -68,20 +90,25 @@
       <button onclick="transformTo('helix')">Double Helix</button>
       <button onclick="transformTo('grid')">Grid (5×4×10)</button>
       <button onclick="reloadData()">Reload Data</button>
+      <button onclick="signOut()">Sign Out</button>
     </div>
 
-    <div style="margin-top:8px;">
-      <strong>Signed in:</strong> <span id="userEmail">not signed in</span>
+    <div class="status">
+      <strong>Status:</strong> <span id="userEmail">not signed in</span>
     </div>
   </div>
 
 <script>
 /* ----------------- CONFIG: put your credentials here ----------------- */
 const CLIENT_ID = '330173954188-eighpf5lec4lccknriqa5gkt19mjv98e.apps.googleusercontent.com';
-const API_KEY = 'AIzaSyAt7SFLAOrKWIj2_-lyY_IpbBbWAc1Ie0Y'; // REMEMBER: restrict this key in Google Cloud
+const API_KEY = 'AIzaSyAt7SFLAOrKWIj2_-lyY_IpbBbWAc1Ie0Y';
 const SPREADSHEET_ID = '13-qIqTXm0Ilp-PsWVcxUX9QpxHi_KfjgXCoKhqfQfAY';
 const SHEET_RANGE = 'Sheet1!A1:F999';
-const CSV_PUBLISHED_URL = ''; // optional public CSV fallback (if you publish the sheet to the web)
+const CSV_PUBLISHED_URL = ''; // optional public CSV fallback
+
+/* ----------------- Auth State ----------------- */
+let accessToken = null;
+let currentUser = null;
 
 /* ----------------- THREE.JS / Scene Setup ----------------- */
 let camera, scene, renderer, controls;
@@ -92,9 +119,9 @@ let itemsData = [];
 initThree();
 animate();
 
-function initThree(){
+function initThree() {
   const container = document.getElementById('container');
-  camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 1, 10000);
+  camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 10000);
   camera.position.z = 3000;
 
   scene = new THREE.Scene();
@@ -112,14 +139,14 @@ function initThree(){
   window.addEventListener('resize', onWindowResize, false);
 }
 
-function onWindowResize(){
-  camera.aspect = window.innerWidth/window.innerHeight;
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   controls.handleResize();
 }
 
-function animate(){
+function animate() {
   requestAnimationFrame(animate);
   TWEEN.update();
   controls.update();
@@ -127,7 +154,7 @@ function animate(){
 }
 
 /* ----------------- Tile creation ----------------- */
-function createTile(row, idx){
+function createTile(row, idx) {
   const el = document.createElement('div');
   el.className = 'element';
 
@@ -145,64 +172,75 @@ function createTile(row, idx){
   img.src = row['Photo'] || 'https://via.placeholder.com/160x88?text=No+Photo';
   el.appendChild(img);
 
-  // text
-  const nameDiv = document.createElement('div'); nameDiv.className='name'; nameDiv.textContent = row['Name'] || '';
+  // Text content
+  const nameDiv = document.createElement('div');
+  nameDiv.className = 'name';
+  nameDiv.textContent = row['Name'] || '';
   el.appendChild(nameDiv);
-  const ageDiv = document.createElement('div'); ageDiv.className='meta'; ageDiv.textContent = 'Age: ' + (row['Age'] || '');
+
+  const ageDiv = document.createElement('div');
+  ageDiv.className = 'meta';
+  ageDiv.textContent = 'Age: ' + (row['Age'] || '');
   el.appendChild(ageDiv);
-  const countryDiv = document.createElement('div'); countryDiv.className='meta'; countryDiv.textContent = 'Country: ' + (row['Country'] || '');
+
+  const countryDiv = document.createElement('div');
+  countryDiv.className = 'meta';
+  countryDiv.textContent = 'Country: ' + (row['Country'] || '');
   el.appendChild(countryDiv);
-  const interestDiv = document.createElement('div'); interestDiv.className='meta'; interestDiv.textContent = 'Interest: ' + (row['Interest'] || '');
+
+  const interestDiv = document.createElement('div');
+  interestDiv.className = 'meta';
+  interestDiv.textContent = 'Interest: ' + (row['Interest'] || '');
   el.appendChild(interestDiv);
-  const nwDiv = document.createElement('div'); nwDiv.className='meta'; nwDiv.textContent = 'Net Worth: ' + (row['Net Worth'] || row['NetWorth'] || '');
+
+  const nwDiv = document.createElement('div');
+  nwDiv.className = 'meta';
+  nwDiv.textContent = 'Net Worth: ' + (row['Net Worth'] || row['NetWorth'] || '');
   el.appendChild(nwDiv);
 
   const objectCSS = new THREE.CSS3DObject(el);
-  objectCSS.position.x = Math.random()*4000 - 2000;
-  objectCSS.position.y = Math.random()*4000 - 2000;
-  objectCSS.position.z = Math.random()*4000 - 2000;
+  objectCSS.position.x = Math.random() * 4000 - 2000;
+  objectCSS.position.y = Math.random() * 4000 - 2000;
+  objectCSS.position.z = Math.random() * 4000 - 2000;
 
   scene.add(objectCSS);
   objects.push(objectCSS);
 }
 
 /* ----------------- parse Net Worth (robust) ----------------- */
-function parseNetWorth(s){
+function parseNetWorth(s) {
   if (!s) return 0;
   s = String(s).trim();
-  // Remove $ and commas, detect K/M
   let mult = 1;
-  if (/[kK]$/.test(s)) { mult = 1e3; s = s.replace(/[kK]$/,''); }
-  if (/[mM]$/.test(s)) { mult = 1e6; s = s.replace(/[mM]$/,''); }
-  const n = parseFloat(s.replace(/[^0-9.]/g,'')) || 0;
+  if (/[kK]$/.test(s)) { mult = 1e3; s = s.replace(/[kK]$/, ''); }
+  if (/[mM]$/.test(s)) { mult = 1e6; s = s.replace(/[mM]$/, ''); }
+  const n = parseFloat(s.replace(/[^0-9.]/g, '')) || 0;
   return n * mult;
 }
 
 /* ----------------- Layout builders ----------------- */
-// Table 20x10
-function buildTableTargets(count){
+function buildTableTargets(count) {
   targets.table = [];
   const cols = 20, rows = 10;
   const spacingX = 180, spacingY = 210;
   const offsetX = (cols - 1) * spacingX / 2;
   const offsetY = (rows - 1) * spacingY / 2;
-  for (let i=0;i<count;i++){
+  for (let i = 0; i < count; i++) {
     const col = i % cols;
-    const row = Math.floor(i/cols);
+    const row = Math.floor(i / cols);
     const obj = new THREE.Object3D();
     obj.position.x = col * spacingX - offsetX;
-    obj.position.y = - (row * spacingY - offsetY);
+    obj.position.y = -(row * spacingY - offsetY);
     obj.position.z = 0;
     targets.table.push(obj);
   }
 }
 
-// Sphere
-function buildSphereTargets(count){
+function buildSphereTargets(count) {
   targets.sphere = [];
   const radius = 900;
-  for (let i=0;i<count;i++){
-    const phi = Math.acos(-1 + (2 * i) / count );
+  for (let i = 0; i < count; i++) {
+    const phi = Math.acos(-1 + (2 * i) / count);
     const theta = Math.sqrt(count * Math.PI) * phi;
     const obj = new THREE.Object3D();
     obj.position.x = radius * Math.cos(theta) * Math.sin(phi);
@@ -212,63 +250,61 @@ function buildSphereTargets(count){
   }
 }
 
-// Double Helix (interleaved)
-function buildDoubleHelixTargets(count){
+function buildDoubleHelixTargets(count) {
   targets.helix = [];
   const separation = 70;
   const spacingY = 24;
   const totalPerStrand = Math.ceil(count / 2);
   const totalHeight = totalPerStrand * spacingY;
-  for (let i=0;i<count;i++){
+  for (let i = 0; i < count; i++) {
     const strand = i % 2;
     const idx = Math.floor(i / 2);
     const angle = idx * 0.4 + (strand === 0 ? 0 : Math.PI);
     const obj = new THREE.Object3D();
     obj.position.x = Math.cos(angle) * separation;
     obj.position.z = Math.sin(angle) * separation;
-    obj.position.y = - (idx * spacingY) + (totalHeight/2);
+    obj.position.y = -(idx * spacingY) + (totalHeight / 2);
     targets.helix.push(obj);
   }
 }
 
-// Grid 5x4x10
-function buildGridTargets(count){
+function buildGridTargets(count) {
   targets.grid = [];
   const gx = 5, gy = 4, gz = 10;
   const spacing = 240;
   const offsetX = (gx - 1) * spacing / 2;
   const offsetY = (gy - 1) * spacing / 2;
   const offsetZ = (gz - 1) * spacing / 2;
-  for (let i=0;i<count;i++){
+  for (let i = 0; i < count; i++) {
     const x = i % gx;
     const y = Math.floor(i / gx) % gy;
     const z = Math.floor(i / (gx * gy)) % gz;
     const obj = new THREE.Object3D();
     obj.position.x = x * spacing - offsetX;
-    obj.position.y = - (y * spacing - offsetY);
+    obj.position.y = -(y * spacing - offsetY);
     obj.position.z = z * spacing - offsetZ;
     targets.grid.push(obj);
   }
 }
 
-function transformTo(layout){
+function transformTo(layout) {
   const arr = targets[layout];
   if (!arr) return;
-  for (let i=0;i<objects.length;i++){
+  for (let i = 0; i < objects.length; i++) {
     const obj = objects[i];
     const tgt = arr[i];
     if (!tgt) continue;
     new TWEEN.Tween(obj.position).to({ x: tgt.position.x, y: tgt.position.y, z: tgt.position.z }, 1300).easing(TWEEN.Easing.Exponential.InOut).start();
-    new TWEEN.Tween(obj.rotation).to({ x:0, y:0, z:0 }, 1300).easing(TWEEN.Easing.Exponential.InOut).start();
+    new TWEEN.Tween(obj.rotation).to({ x: 0, y: 0, z: 0 }, 1300).easing(TWEEN.Easing.Exponential.InOut).start();
   }
 }
 
-/* ----------------- Data loading (Sheets API with OAuth token) ----------------- */
-async function loadSheetsUsingToken(accessToken){
+/* ----------------- Data loading ----------------- */
+async function loadSheetsUsingToken(accessToken) {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_RANGE)}?majorDimension=ROWS`;
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken }});
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
   if (!res.ok) {
-    const text = await res.text().catch(()=>'');
+    const text = await res.text().catch(() => '');
     throw new Error('Sheets API error ' + res.status + ' ' + text);
   }
   const json = await res.json();
@@ -277,121 +313,223 @@ async function loadSheetsUsingToken(accessToken){
   const headers = rows[0];
   return rows.slice(1).map(r => {
     const obj = {};
-    for (let i=0;i<headers.length;i++) obj[headers[i]] = r[i] || '';
+    for (let i = 0; i < headers.length; i++) obj[headers[i]] = r[i] || '';
     return obj;
   });
 }
 
-// CSV fallback (public publish)
-async function loadDataFromCsvUrl(url){
+async function loadDataFromCsvUrl(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error('CSV fetch failed: ' + res.status);
   const text = await res.text();
   const lines = text.split(/\r?\n/).filter(Boolean);
   const delim = lines[0].includes('\t') ? '\t' : ',';
-  const headers = lines[0].split(delim).map(h=>h.trim());
+  const headers = lines[0].split(delim).map(h => h.trim());
   return lines.slice(1).map(line => {
     const cols = line.split(delim);
     const obj = {};
-    headers.forEach((h,i)=> obj[h] = (cols[i] || '').trim());
+    headers.forEach((h, i) => obj[h] = (cols[i] || '').trim());
     return obj;
   });
 }
 
-async function loadData(accessToken){
+async function loadData(token) {
   try {
     let data = [];
-    if (accessToken && SPREADSHEET_ID) {
-      data = await loadSheetsUsingToken(accessToken);
-    } else if (CSV_PUBLISHED_URL) {
+    
+    // Try Sheets API first if we have a token
+    if (token && SPREADSHEET_ID) {
+      console.log('Loading from Google Sheets...');
+      data = await loadSheetsUsingToken(token);
+    }
+    // Try CSV fallback
+    else if (CSV_PUBLISHED_URL) {
+      console.log('Loading from CSV...');
       data = await loadDataFromCsvUrl(CSV_PUBLISHED_URL);
-    } else {
-      throw new Error('No access token and no CSV fallback configured.');
+    }
+    // Create sample data if no sources available
+    else {
+      console.log('Creating sample data...');
+      data = createSampleData(50);
+      document.getElementById('userEmail').textContent = 'Demo Mode (sample data)';
     }
 
-    // clear previous objects
+    // Clear previous objects
     objects.forEach(o => scene.remove(o));
     objects = [];
 
+    // Create tiles
     data.forEach((row, idx) => createTile(row, idx));
 
+    // Build layouts
     const count = objects.length;
     buildTableTargets(count);
     buildSphereTargets(count);
     buildDoubleHelixTargets(count);
     buildGridTargets(count);
 
+    // Start with table layout
     transformTo('table');
     console.log('Loaded rows:', count);
+    
   } catch (err) {
     console.error('loadData error:', err);
     alert('Load data failed: ' + err.message);
   }
 }
 
-function reloadData(){
-  if (window.gapiAccessToken) loadData(window.gapiAccessToken);
-  else if (CSV_PUBLISHED_URL) loadData(null);
-  else alert('Please sign in first.');
+function createSampleData(count) {
+  const data = [];
+  const names = ['John Doe', 'Jane Smith', 'Robert Johnson', 'Emily Brown', 'Michael Wilson', 
+                 'Sarah Davis', 'David Miller', 'Lisa Taylor', 'James Anderson', 'Karen Thomas'];
+  const countries = ['USA', 'UK', 'Canada', 'Australia', 'Germany', 'France', 'Japan', 'Brazil', 'India', 'China'];
+  const interests = ['Technology', 'Finance', 'Art', 'Science', 'Sports', 'Music', 'Travel', 'Food', 'Photography', 'Gaming'];
+  
+  for (let i = 0; i < count; i++) {
+    const netWorth = (10 + Math.random() * 290).toFixed(1);
+    const netWorthText = Math.random() > 0.5 ? `$${netWorth}K` : `$${(netWorth / 1000).toFixed(2)}M`;
+    
+    data.push({
+      Name: `${names[i % names.length]} ${i + 1}`,
+      Age: Math.floor(20 + Math.random() * 50),
+      Country: countries[i % countries.length],
+      Interest: interests[i % interests.length],
+      'Net Worth': netWorthText,
+      Photo: `https://picsum.photos/seed/${i + 100}/160/88`
+    });
+  }
+  return data;
 }
 
-/* ----------------- Google Identity Services: robust init & token flow ----------------- */
-let tokenClient = null;
-
-function ensureGISReadyAndInit(){
-  if (!window.google || !google.accounts) {
-    // try again shortly until google.accounts is available
-    setTimeout(ensureGISReadyAndInit, 200);
+/* ----------------- Google Sign-In & Auth ----------------- */
+function initGoogleSignIn() {
+  if (!window.google) {
+    setTimeout(initGoogleSignIn, 100);
     return;
   }
-
-  // Render the default sign-in button (the div .g_id_signin will be replaced by Google)
-  google.accounts.id.initialize({ client_id: CLIENT_ID });
-
-  // Create the token client for requesting access tokens for Sheets API
-  tokenClient = google.accounts.oauth2.initTokenClient({
+  
+  console.log('Initializing Google Sign-In...');
+  
+  google.accounts.id.initialize({
     client_id: CLIENT_ID,
-    scope: 'openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/spreadsheets.readonly',
-    callback: async (resp) => {
-      // This is called after the user completes the consent flow and a token is returned (or an error)
-      console.log('tokenClient callback', resp);
-      if (resp.error) {
-        console.error('Token error', resp);
-        alert('Token error: ' + (resp.error_description || resp.error));
+    callback: handleCredentialResponse,
+    auto_select: false,
+    ux_mode: 'popup'
+  });
+  
+  // Render the sign-in button
+  google.accounts.id.renderButton(
+    document.getElementById('g_id_signin'),
+    { 
+      theme: 'outline', 
+      size: 'large', 
+      type: 'standard',
+      text: 'signin_with',
+      shape: 'rectangular'
+    }
+  );
+  
+  // Try to sign in automatically
+  google.accounts.id.prompt();
+}
+
+function handleCredentialResponse(response) {
+  console.log('Google Sign-In Response:', response);
+  
+  if (response.credential) {
+    const userObj = parseJwt(response.credential);
+    console.log('User info:', userObj);
+    
+    currentUser = userObj;
+    document.getElementById('userEmail').textContent = userObj.email || userObj.name || 'Signed in';
+    
+    // Get access token for Sheets API
+    getAccessTokenForSheets();
+  } else {
+    console.error('Sign-in failed');
+    document.getElementById('userEmail').textContent = 'Sign-in failed';
+  }
+}
+
+function parseJwt(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error('Error parsing JWT:', e);
+    return {};
+  }
+}
+
+function getAccessTokenForSheets() {
+  console.log('Requesting Sheets API access token...');
+  
+  const tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
+    callback: async (tokenResponse) => {
+      if (tokenResponse.error) {
+        console.error('Token error:', tokenResponse);
+        alert('Failed to get access: ' + tokenResponse.error_description);
         return;
       }
-      const accessToken = resp.access_token;
-      window.gapiAccessToken = accessToken;
-
-      // Fetch user info and update UI
-      try {
-        const userInfo = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: 'Bearer ' + accessToken }
-        }).then(r => r.json());
-        document.getElementById('userEmail').textContent = userInfo.email || 'signed in';
-      } catch(e) {
-        console.warn('userinfo fetch failed', e);
-        document.getElementById('userEmail').textContent = 'signed in';
-      }
-
-      // Load the sheet data now that we have a token
+      
+      console.log('Got access token!');
+      accessToken = tokenResponse.access_token;
+      
+      // Load data with the token
       await loadData(accessToken);
     }
   });
-
-  // Attach a delegated click listener to the document so the GIS-provided button (which is rendered async)
-  // can be handled reliably even if browser replaced/rewrote the button markup after our script ran.
-  document.body.addEventListener('click', (e) => {
-    const btn = e.target.closest('.g_id_signin');
-    if (!btn) return;
-    // Request access token - prompt consent each time for clarity during dev
-    tokenClient.requestAccessToken({ prompt: 'consent' });
-  });
+  
+  tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
-// Start GIS init when page loads
+function reloadData() {
+  if (accessToken) {
+    loadData(accessToken);
+  } else if (currentUser) {
+    getAccessTokenForSheets();
+  } else {
+    alert('Please sign in first using the Google button.');
+  }
+}
+
+function signOut() {
+  if (currentUser) {
+    google.accounts.id.disableAutoSelect();
+    google.accounts.id.revoke(currentUser.email, () => {
+      console.log('User signed out');
+    });
+  }
+  
+  currentUser = null;
+  accessToken = null;
+  document.getElementById('userEmail').textContent = 'not signed in';
+  
+  // Clear the scene
+  objects.forEach(o => scene.remove(o));
+  objects = [];
+  
+  // Show sign-in button again
+  initGoogleSignIn();
+}
+
+/* ----------------- Initialize on page load ----------------- */
 window.addEventListener('load', () => {
-  ensureGISReadyAndInit();
+  initGoogleSignIn();
+  
+  // Load demo data immediately (no need to wait for sign-in)
+  setTimeout(() => {
+    if (!accessToken) {
+      console.log('Loading demo data...');
+      loadData(null);
+    }
+  }, 1000);
 });
 
 /* ----------------- Minimal Tween (kept small) ----------------- */
